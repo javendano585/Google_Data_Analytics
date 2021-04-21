@@ -6,14 +6,22 @@ output: html_document
 ---
 
 
-## Introduction and background
-This is a case study for the Google Analytics Coursera Course.
+### Background
+This is a case study for the Google Data Analytics Capstone.  
 Case Study 2: How can a wellness technology company play it smart?
 
-The goal is to be able to find trends in smart device usage. This would then be used to help the Bellabeat marketing strategy.
+
+## Executive Summary
+Smart devices are becoming more common. Everyone is aware that they can track their steps, but many of these devices can track our active minutes, heart rates, sleeping behavior and more.  
+The goal of this analysis is to learn how consumers are using a competitors devices. This would then be used to help the Bellabeat marketing strategy.  
+
+Primary questions:  
+1. What are some trends in smart device usage?  
+2. How could these trends apply to Bellabeat customers?  
+3. How could these trends help influence Bellabeat's marketing strategy?  
 
 ## Dataset
-Data was copied locally. The original data can be found here:
+The original data can be found here:
 https://www.kaggle.com/arashnic/fitbit
 
 ```{r Loading Libraries, message=FALSE, warning=FALSE, include=FALSE}
@@ -28,6 +36,35 @@ library(extrafont)
 ```
 ### Loading and Cleaning the data
 The data focuses on daily, hourly, and minute statistics. This analysis focuses primarily on the daily and hourly tables.
+
+<details>
+  <summary>Click for Details on the Data Files</summary>
+18 CSV Files were provided.  
+
+* 4 Files with Daily data  
+* 3 Files with Hourly data  
+* 8 Files with Seconds data  
+* 1 File with Sleep data  
+* 1 File with Heart Rate data  
+* 1 File with Weight Loss logs   
+<br>    
+* 3 of the seconds files were redundant data, formatted in a wide format. These were ignored in favor of the long data.  
+* 3 of the daily files contained data already present in the main dailyActivity file. These were also ignored.
+</details>
+  
+<br>
+<details>
+  <summary>Click for Cleaning Steps</summary>
+Data Cleaning:  
+
+* IDs were simplified to 1-34 to make analysis easier. Same change applied to all tables.  
+* ID 14 was suppresed, as it only had 4 daily entries with little activity.  
+* All column names were cleaned.  
+* The last day (5/12) was removed as it seemed to have incomplete data.  
+* Days with 0 steps were removed. Device must've been off or unused these days.  
+* Joined all hourly tables into a single table.  
+* Joined all minute tables (except sleep) into a single table.  
+</details>
 
 ```{r Loading CSV Data, include=FALSE}
 daily_activity <- read.csv("Fitabase_Data\\dailyActivity_merged.csv")
@@ -70,19 +107,22 @@ daily_activity <- daily_activity %>%
   mutate(activity_date = mdy(activity_date)) %>%
   inner_join(ids, by = 'id') %>%
   filter(total_steps > 0,
-         activity_date < '2016-05-12')
+         activity_date < '2016-05-12') %>%
+  select(-id)
 
 heartrate_seconds <- heartrate_seconds %>%
   clean_names() %>%
   mutate(time = mdy_hms(time)) %>%
-  inner_join(ids, by = 'id')
+  inner_join(ids, by = 'id') %>%
+  select(-id)
 
 hourly_activity <- hourly_calories %>%
   left_join(hourly_intensities, by = c('Id', 'ActivityHour')) %>%
   left_join(hourly_steps, by = c('Id', 'ActivityHour')) %>%
   clean_names() %>%
   mutate(activity_hour = mdy_hms(activity_hour)) %>%
-  inner_join(ids, by = 'id')
+  inner_join(ids, by = 'id') %>%
+  select(-id)
 rm(hourly_calories, hourly_intensities, hourly_steps)
 
 minute_activity <- minute_calories %>%
@@ -92,21 +132,25 @@ minute_activity <- minute_calories %>%
   clean_names() %>%
   mutate(activity_minute = mdy_hms(activity_minute)) %>%
   rename(mets = me_ts) %>%
-  inner_join(ids, by = 'id')
+  inner_join(ids, by = 'id') %>%
+  select(-id)
 rm(minute_calories, minute_intensities, minute_mets, minute_steps)
 
 minute_sleep <- minute_sleep %>%
   clean_names() %>%
   mutate(date = mdy_hms(date)) %>%
-  inner_join(ids, by = 'id')
+  inner_join(ids, by = 'id') %>%
+  select(-id)
 sleep_day <- sleep_day %>%
   clean_names() %>%
   mutate(sleep_day = mdy_hms(sleep_day)) %>%
-  inner_join(ids, by = 'id')
+  inner_join(ids, by = 'id') %>%
+  select(-id)
 weight_log <- weight_log %>%
   clean_names() %>%
   mutate(date = mdy_hms(date)) %>%
-  inner_join(ids, by = 'id')
+  inner_join(ids, by = 'id') %>%
+  select(-id)
 ```
 
 
@@ -248,17 +292,24 @@ hourly_activity %>%
        caption = 'Data - Fitbit Tracker Data on Kaggle')
 ```
 
-## Key Findinds
-Although the numbers do vary, 10k is a good central goal that seems to be what a lot of users aim for. It would be interesting to find ways to encourage and help users get to that goal.  
+## Conclusions
 
-* During the week, users are slightly more active on Tuesdays and Thursdays.
-* Sundays is the least active days.
+Trends:  
+
+* 10k is a goal that seems to be what a lot of users aim for.  
+* During the week, users are slightly more active on Tuesdays and Thursdays.  
+* Sundays is the least active days.  
 
 There are a few interesting peaks in activity during the day:  
+
+* Saturdays at 1PM.  
+* Weekdays between 5-7 PM.  
+* Weekdays at noon.  
+
+Takeaways:
+Marketing could target those areas of higher activity to encourage people to do even more. For example, they could target those that exercise after school and work, as they could enjoy seeing how hard they were working.   
   
-* Saturdays at 1PM.
-* Weekdays between 5-7 PM. Likely after work and after school activity.
-* Weekdays at noon.
+There are also other activities that could be encouraged. For example, people seem to take short walks at lunch. Being able to see how how small activities add up could be encouraging.  
   
-Marketing could target those areas of higher activity to encourage people to do even more. For example, encourage short walks at lunch. Or they could focus on less active days, like Sundays, and encourage people to be more active during those times.
+Another strategy is to focus on less active days, like Sundays. We could encourage people to be more active during those times.
 
