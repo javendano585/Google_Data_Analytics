@@ -1,0 +1,264 @@
+---
+title: "Bellabeat Analysis"
+author: "Jaime Avendano"
+date: "4/18/2021"
+output: html_document
+---
+
+
+## Introduction and background
+This is a case study for the Google Analytics Coursera Course.
+Case Study 2: How can a wellness technology company play it smart?
+
+The goal is to be able to find trends in smart device usage. This would then be used to help the Bellabeat marketing strategy.
+
+## Dataset
+Data was copied locally. The original data can be found here:
+https://www.kaggle.com/arashnic/fitbit
+
+```{r Loading Libraries, message=FALSE, warning=FALSE, include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(skimr)
+library(scales)
+library(gt)
+
+library(extrafont)
+```
+### Loading and Cleaning the data
+The data focuses on daily, hourly, and minute statistics. This analysis focuses primarily on the daily and hourly tables.
+
+```{r Loading CSV Data, include=FALSE}
+daily_activity <- read.csv("Fitabase_Data\\dailyActivity_merged.csv")
+ids <- data.frame(id = unique(daily_activity$Id)) %>%
+  mutate(new_id = rank(id),
+         new_id = as_factor(new_id)) %>%
+  filter(new_id != '14') # Only 4 daily entries.
+
+heartrate_seconds <- read.csv("Fitabase_Data\\heartrate_seconds_merged.csv")
+
+hourly_calories <- read.csv("Fitabase_Data\\hourlyCalories_merged.csv")
+hourly_intensities <- read.csv("Fitabase_Data\\hourlyIntensities_merged.csv")
+hourly_steps <- read.csv("Fitabase_Data\\hourlySteps_merged.csv")
+
+minute_calories <- read.csv("Fitabase_Data\\minuteCaloriesNarrow_merged.csv")
+minute_intensities <- read.csv("Fitabase_Data\\minuteIntensitiesNarrow_merged.csv")
+minute_mets <- read.csv("Fitabase_Data\\minuteMETsNarrow_merged.csv")
+minute_steps <- read.csv("Fitabase_Data\\minuteStepsNarrow_merged.csv")
+
+minute_sleep <- read.csv("Fitabase_Data\\minuteSleep_merged.csv")
+
+sleep_day <- read.csv("Fitabase_Data\\sleepDay_merged.csv")
+weight_log <- read.csv("Fitabase_Data\\weightLogInfo_merged.csv")
+
+# These data points are already included in daily_activity
+#daily_calories <- read.csv("Fitabase_Data\\dailyCalories_merged.csv")
+#daily_intensities <- read.csv("Fitabase_Data\\dailyIntensities_merged.csv")
+#daily_steps <- read.csv("Fitabase_Data\\dailySteps_merged.csv")
+
+# I will be using the long version of this data.
+#minute_calories_wide <- read.csv("Fitabase_Data\\minuteCaloriesWide_merged.csv")
+#minute_intensities_wide <- read.csv("Fitabase_Data\\minuteIntensitiesWide_merged.csv")
+#minute_steps_wide <- read.csv("Fitabase_Data\\minuteStepsWide_merged.csv")
+
+```
+
+```{r Initital Data Cleaning, echo=FALSE}
+daily_activity <- daily_activity %>%
+  clean_names() %>%
+  mutate(activity_date = mdy(activity_date)) %>%
+  inner_join(ids, by = 'id') %>%
+  filter(total_steps > 0,
+         activity_date < '2016-05-12')
+
+heartrate_seconds <- heartrate_seconds %>%
+  clean_names() %>%
+  mutate(time = mdy_hms(time)) %>%
+  inner_join(ids, by = 'id')
+
+hourly_activity <- hourly_calories %>%
+  left_join(hourly_intensities, by = c('Id', 'ActivityHour')) %>%
+  left_join(hourly_steps, by = c('Id', 'ActivityHour')) %>%
+  clean_names() %>%
+  mutate(activity_hour = mdy_hms(activity_hour)) %>%
+  inner_join(ids, by = 'id')
+rm(hourly_calories, hourly_intensities, hourly_steps)
+
+minute_activity <- minute_calories %>%
+  left_join(minute_intensities, by = c('Id', 'ActivityMinute')) %>%
+  left_join(minute_mets, by = c('Id', 'ActivityMinute')) %>%
+  left_join(minute_steps, by = c('Id', 'ActivityMinute')) %>%
+  clean_names() %>%
+  mutate(activity_minute = mdy_hms(activity_minute)) %>%
+  rename(mets = me_ts) %>%
+  inner_join(ids, by = 'id')
+rm(minute_calories, minute_intensities, minute_mets, minute_steps)
+
+minute_sleep <- minute_sleep %>%
+  clean_names() %>%
+  mutate(date = mdy_hms(date)) %>%
+  inner_join(ids, by = 'id')
+sleep_day <- sleep_day %>%
+  clean_names() %>%
+  mutate(sleep_day = mdy_hms(sleep_day)) %>%
+  inner_join(ids, by = 'id')
+weight_log <- weight_log %>%
+  clean_names() %>%
+  mutate(date = mdy_hms(date)) %>%
+  inner_join(ids, by = 'id')
+```
+
+
+
+## Summarizing the data
+
+```{r User Summary, echo=FALSE}
+daily_activity %>% 
+  group_by(new_id) %>%
+  summarize(days = n(),
+            avg_steps = mean(total_steps),
+            avg_active_minutes = mean(very_active_minutes + fairly_active_minutes + lightly_active_minutes),
+            step_level = case_when(
+              avg_steps <= 5700 ~ '< 5.7k',
+              avg_steps <= 7600 ~ '5.7-7.6k',
+              avg_steps <= 10000 ~ '7.6-10k',
+              TRUE ~ '> 10k'
+            ),
+            .groups = 'drop') %>%
+  group_by(step_level) %>%
+  summarize(users = n(),
+            avg_days = mean(days),
+            avg_steps = mean(avg_steps),
+            avg_active_minutes = mean(avg_active_minutes),
+            .groups = 'drop') %>%
+  arrange(avg_steps) %>%
+  # filter(dense_rank(avg_steps) <= 3 | dense_rank(desc(avg_steps)) <= 3) %>%
+  # select(-new_id) %>%
+  gt() %>%
+  fmt_number(columns = c('avg_steps', 'avg_active_minutes'),
+             decimals = 0,
+             use_seps = TRUE) %>%
+  cols_label(step_level = 'Usage',
+             users = 'Users',
+             avg_days = html('Average<br>Days'),
+             avg_steps = html('Average<br>Daily<br>Steps'),
+             avg_active_minutes = html('Average<br>Active<br>Minutes')) %>%
+  fmt_number(columns = c('avg_steps', 'avg_active_minutes'),
+             decimals = 0,
+             use_seps = TRUE) %>%
+  fmt_number(columns = c('avg_days'),
+             decimals = 1) %>%
+  tab_header(
+    title = md('**Fitbit tracker analysis (32 participants)**'),
+    subtitle = md('Participants grouped by quantiles.')
+    ) %>%
+  tab_source_note(
+    source_note = 'Fitbit Fitness Tracker Data from Kaggle'
+    ) %>%
+  tab_options(
+    heading.align = 'left'
+  )
+```
+## Plotting Usage
+What are the most common step values that are reached?
+
+```{r Daily Steps Historgram, echo=FALSE}
+daily_activity %>%
+  ggplot() +
+  geom_histogram(aes(total_steps), bins = 30, color = 'black') +
+  scale_x_continuous(labels = comma) +
+  theme_minimal() +
+  labs(x = 'Total Steps',
+       y = 'Count',
+       title = 'Histogram of daily steps taken')
+```
+
+
+## Plotting Usage
+What days do people take the most steps and what days are they the most active?
+
+```{r Daily Steps, echo=FALSE}
+daily_activity %>%
+  mutate(day_of_week = weekdays(activity_date),
+         day_of_week = fct_relevel(day_of_week, c("Sunday", "Monday", "Tuesday", "Wednesday", 
+                                                  "Thursday", "Friday", "Saturday")),
+         total_active_minutes = very_active_minutes + fairly_active_minutes + light_active_distance) %>%
+  ggplot() + 
+  geom_boxplot(aes(day_of_week, total_steps, group = day_of_week)) +
+  geom_hline(yintercept = 8400, color = 'blue') +
+  theme_minimal() +
+  scale_y_continuous(labels = comma) +
+  labs(x = NULL,
+       y = 'Total Steps',
+       title = 'Daily Total Steps',
+       subtitle = 'Comparison of daily step activity. Average = 8,400 steps/day.',
+       caption = 'Data - Fitbit Tracker Data on Kaggle')
+```
+
+
+```{r Daily Active Minutes, echo=FALSE}
+daily_activity %>%
+  mutate(day_of_week = weekdays(activity_date),
+         day_of_week = fct_relevel(day_of_week, c("Sunday", "Monday", "Tuesday", "Wednesday", 
+                                                  "Thursday", "Friday", "Saturday")),
+         total_active_minutes = very_active_minutes + fairly_active_minutes + light_active_distance) %>%
+  ggplot() + 
+  geom_boxplot(aes(day_of_week, total_active_minutes, group = day_of_week)) +
+  geom_hline(yintercept = 42, color = 'blue') +
+  theme_minimal() +
+  scale_y_continuous(labels = comma) +
+  labs(x = NULL,
+       y = 'Total Active Minutes',
+       title = 'Daily Total Active Minutes',
+       subtitle = 'Comparison of daily activity. Average = 42 minutes/day.',
+       caption = 'Data - Fitbit Tracker Data on Kaggle')
+```
+
+How active are people throughout the day? 
+Most people typically have different schedules on weekends.
+
+```{r Hourly Activity, echo=FALSE}
+hourly_activity %>%
+  mutate(hour = hour(activity_hour),
+         day_of_week = weekdays(activity_hour),
+         day_group = ifelse(day_of_week %in% c('Sunday', 'Saturday'), day_of_week, 'Weekday')
+         ) %>% 
+  group_by(hour, day_group) %>%
+  summarize(avg_steps = mean(step_total),
+            avg_calories = mean(calories),
+            avg_intensity = mean(total_intensity),
+            .groups = 'drop') %>%
+  ggplot(aes(hour, avg_intensity, color = day_group)) + 
+  geom_point() + 
+  geom_line() +
+  annotate('text', x = 13.5, y = 29.5, label = 'Saturday 1 PM ', 
+           hjust = 0, color = 'royalblue', family = 'serif') +
+  annotate('text', x = 18, y = 24.5, label = 'Weekdays 5-7 PM ', 
+           hjust = 0, color = 'deepskyblue', family = 'serif') +
+  theme_minimal() +
+  scale_x_continuous(breaks = seq(0, 23, 2),
+                     labels = paste0(seq(0, 23, 2), ':00')) +
+  scale_color_manual(values = c('royalblue', 'darkseagreen', 'deepskyblue')) +
+  labs(x = 'Hour',
+       y = 'Total Active Minutes',
+       color = '',
+       title = 'Hourly Active Minutes',
+       subtitle = 'Comparison of weekday and weekend activity',
+       caption = 'Data - Fitbit Tracker Data on Kaggle')
+```
+
+## Key Findinds
+Although the numbers do vary, 10k is a good central goal that seems to be what a lot of users aim for. It would be interesting to find ways to encourage and help users get to that goal.  
+
+* During the week, users are slightly more active on Tuesdays and Thursdays.
+* Sundays is the least active days.
+
+There are a few interesting peaks in activity during the day:  
+  
+* Saturdays at 1PM.
+* Weekdays between 5-7 PM. Likely after work and after school activity.
+* Weekdays at noon.
+  
+Marketing could target those areas of higher activity to encourage people to do even more. For example, encourage short walks at lunch. Or they could focus on less active days, like Sundays, and encourage people to be more active during those times.
+
